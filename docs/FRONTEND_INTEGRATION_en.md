@@ -1,5 +1,7 @@
 # Third-party RP frontend integration
 
+2.3.0 candidate: [v3 prompt sources and external composition](PROMPT_API_V3_en.md) adds lossless source snapshots and a session-scoped backend composer. Existing v1/v2 remain available; final acceptance is pending.
+
 [中文](FRONTEND_INTEGRATION_zh-CN.md)
 
 Status: dsh-tavern `2.2.0` (released 2026-09-11) and DSH `0.1.2-rc.1` / `0.1.5-rc.1`. HTTP fields follow [API_en.md](API_en.md). This page covers delivery, mode lifecycle, and product-action composition.

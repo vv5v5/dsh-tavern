@@ -51,6 +51,7 @@ var PLUGIN_ID = "pmp-dsh-tavern";
 var API_ROOT = `/${PLUGIN_ID}/api`;
 var API_V1 = `${API_ROOT}/v1`;
 var API_V2 = `${API_ROOT}/v2`;
+var API_V3 = `${API_ROOT}/v3`;
 var LEGACY_API_ROOT = "/dsh-tavern/api";
 var PROFILE_SECTION = `${PLUGIN_ID}:profile`;
 var CLIENT_REFRESH_EVENT = `${PLUGIN_ID}:refresh`;
@@ -63,6 +64,7 @@ var identityConstants = Object.freeze({
   apiRoot: API_ROOT,
   apiV1: API_V1,
   apiV2: API_V2,
+  apiV3: API_V3,
   chromeServiceName: CHROME_SERVICE_NAME,
   legacyApiRoot: LEGACY_API_ROOT,
   profileSection: PROFILE_SECTION,

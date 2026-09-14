@@ -61,6 +61,7 @@ import {
   resolveRpConfig,
   rpModeConstants,
 } from './rp-mode.js'
+import { PromptCompositionService, PROMPT_SERVICE_NAME, createPromptApiHandler, isPromptApiPath } from './prompt-composition.js'
 import { prepareStorageDir } from './storage-location.js'
 
 export const name = PLUGIN_ID
@@ -349,7 +350,25 @@ export function apply(ctx, config = {}) {
   runtime.registerCharacterAdapter(createCharacterAdapter(characterStore))
   runtime.registerUserAdapter(createUserAdapter(userStore))
   runtime.registerWorldBookAdapter(createWorldBookAdapter(worldBookStore, config.worldBook))
-  const notifyChange = () => ctx.emit('system-prompt/change')
+  const promptComposition = new PromptCompositionService({
+    storageDir, selections, presets: store, characters: characterStore, users: userStore, worldBooks: worldBookStore,
+    userWorldBooks, resourceWorldBooks, maxProfileBytes: runtime.maxProfileBytes,
+    isRunning: id => ctx.get('agents')?.get?.(id)?.status === 'running',
+    onChange: () => ctx.emit('system-prompt/change'),
+  })
+  runtime.promptComposition = promptComposition
+  if (typeof ctx.provide === 'function') {
+    const face = Object.freeze(Object.fromEntries(
+      ['capabilities', 'getSources', 'getMode', 'setMode', 'registerComposer', 'subscribe']
+        .map(method => [method, promptComposition[method].bind(promptComposition)]),
+    ))
+    ctx.provide(PROMPT_SERVICE_NAME, face)
+  }
+  ctx.on('dispose', () => promptComposition.dispose())
+  const notifyChange = () => {
+    ctx.emit('system-prompt/change')
+    promptComposition.invalidate()
+  }
   const traceSafely = (operation, callback) => {
     try {
       return callback()
@@ -444,7 +463,7 @@ export function apply(ctx, config = {}) {
     text: (context) => {
       const snapshot = runtime.forAssembleContext(context)
       const claimMetadata = snapshot.audit?.activation ?? null
-      return [snapshot.systemText, importContexts.contextFor(context.agent?.id, claimMetadata, snapshot.macroContext, context.agent?.session)].filter(Boolean).join('\n\n')
+      return [snapshot.externalSections === undefined ? snapshot.systemText : '', importContexts.contextFor(context.agent?.id, claimMetadata, snapshot.macroContext, context.agent?.session)].filter(Boolean).join('\n\n')
     },
   })
   ctx.systemPrompt.section({
@@ -517,6 +536,20 @@ export function apply(ctx, config = {}) {
     const contexts = snapshot.runtimeContexts.length === 0
       ? assembly.contexts
       : [...assembly.contexts, ...snapshot.runtimeContexts]
+    if (snapshot.externalSections !== undefined) {
+      // Replace only Tavern's profile contribution; retain import-context and every Host/RP section.
+      const sections = []
+      let inserted = false
+      for (const section of assembly.sections) {
+        sections.push(section)
+        if (section.name === PROFILE_SECTION) {
+          sections.push(...snapshot.externalSections)
+          inserted = true
+        }
+      }
+      if (!inserted) sections.push(...snapshot.externalSections)
+      return { ...assembly, sections, contexts }
+    }
     if (snapshot.systemPromptMode !== 'replace') return { ...assembly, contexts }
     const profileSections = assembly.sections.filter((section) => (
       section.name === PROFILE_SECTION || section.name === rpModeConstants.sectionName
@@ -532,6 +565,9 @@ export function apply(ctx, config = {}) {
   })
 
   const registerHttpApi = webCtx => {
+    const promptApi = createPromptApiHandler(promptComposition, {
+      ensureSession: id => playHost.coordinates(id),
+    })
     const presetApi = createPresetApiHandler(
       store,
       notifyChange,
@@ -622,7 +658,9 @@ export function apply(ctx, config = {}) {
       },
     })
     const api = secureTavernApi(
-      (req, res) => isPlayApiPath(req.url)
+      (req, res) => isPromptApiPath(req.url)
+        ? promptApi(req, res)
+        : isPlayApiPath(req.url)
         ? playApi(req, res)
         : isUiSettingsApiPath(req.url)
         ? uiSettingsApi(req, res)
@@ -670,6 +708,7 @@ export function apply(ctx, config = {}) {
   ctx.logger.info(`dsh-tavern: Tavern profile loader ready (${storageDir})`)
   Object.defineProperties(store, {
     profileLoader: { value: runtime, enumerable: false },
+    promptComposition: { value: promptComposition, enumerable: false },
     sessionSelections: { value: selections, enumerable: false },
     characterStore: { value: characterStore, enumerable: false },
     worldBookStore: { value: worldBookStore, enumerable: false },
@@ -808,6 +847,7 @@ export {
   API_ROOT,
   API_V1,
   API_V2,
+  API_V3,
   CLIENT_REFRESH_EVENT,
   CLIENT_UI_SETTINGS_EVENT,
   CLIENT_CONVERSATION_SETTINGS_EVENT,
@@ -816,3 +856,5 @@ export {
   PROFILE_SECTION,
   identityConstants,
 } from '../../identity.js'
+
+export { PromptCompositionService, PROMPT_SERVICE_NAME, createPromptApiHandler, isPromptApiPath } from './prompt-composition.js'

@@ -1,5 +1,7 @@
 # Prompt pipeline and compatibility map
 
+2.3.0 候选新增：[v3 提示词来源与外部组合](PROMPT_API_V3.md)，支持完整来源快照和每会话后端接管。既有 v1/v2 保留，最终人工验收待完成。
+
 [English](PROMPT_PIPELINE_en.md)
 
 状态：2026-08-18，已对齐 RP `rp:policy` 段与当前输入提前识别实现。

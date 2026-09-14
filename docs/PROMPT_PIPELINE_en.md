@@ -1,5 +1,7 @@
 # Prompt pipeline and compatibility map
 
+2.3.0 candidate: [v3 prompt sources and external composition](PROMPT_API_V3_en.md) adds lossless source snapshots and a session-scoped backend composer. Existing v1/v2 remain available; final acceptance is pending.
+
 [中文](PROMPT_PIPELINE.md)
 
 Status: 2026-08-18. Aligned with the RP `rp:policy` section and early recognition of current input.

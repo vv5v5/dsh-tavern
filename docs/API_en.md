@@ -1,5 +1,7 @@
 # HTTP API
 
+2.3.0 candidate: [v3 prompt sources and external composition](PROMPT_API_V3_en.md) adds lossless source snapshots and a session-scoped backend composer. Existing v1/v2 remain available; final acceptance is pending.
+
 Tavern `2.2.0` (released 2026-09-11), DSH `0.1.5-rc.1` delta: messages add format metadata, a read-only coordinates endpoint is available, branch accepts the coordinate format, and timeline GET/PUT refuses unmigrated references. See the [V3 migration contract](DSH_0.1.5_MIGRATION_en.md) for fields and errors. V3 Trace reads effective system/message for the prompt and request/header for config and tools.
 
 [中文](API.md)

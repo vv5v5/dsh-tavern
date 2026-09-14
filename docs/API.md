@@ -1,5 +1,7 @@
 # HTTP API
 
+2.3.0 候选新增：[v3 提示词来源与外部组合](PROMPT_API_V3.md)，支持完整来源快照和每会话后端接管。既有 v1/v2 保留，最终人工验收待完成。
+
 Tavern `2.2.0`（2026-09-11 发布）的 DSH `0.1.5-rc.1` 兼容增量：messages 响应增加格式信息，新增只读 coordinates endpoint，branch 接收坐标格式版本，timeline GET/PUT 拒绝未迁移引用。具体字段与错误码见 [V3 迁移合同](DSH_0.1.5_MIGRATION.md)。Trace 的 V3 系统提示词权威来自有效 system/message，配置与工具仍来自 request/header。
 
 [English](API_en.md)

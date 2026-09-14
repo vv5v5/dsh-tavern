@@ -1,5 +1,7 @@
 # pmp-dsh-tavern
 
+Development candidate 2.3.0 adds the [v3 prompt composition API](docs/PROMPT_API_V3_en.md); final acceptance is pending. The released baseline below remains 2.2.0.
+
 [中文](README.md)
 
 A SillyTavern compatibility plugin that keeps DeepSeek Harness (DSH) authoritative over sessions and execution, with frontend and backend APIs for composing Tavern capabilities with native DSH features.

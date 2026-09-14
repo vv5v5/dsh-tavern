@@ -122,6 +122,7 @@ export class TavernProfileLoader {
     this.userAdapter = null
     this.worldBookAdapter = null
     this.activationContextProvider = null
+    this.promptComposition = null
     this.contextCache = new WeakMap()
     this.assembledByAgent = new WeakMap()
   }
@@ -229,7 +230,21 @@ export class TavernProfileLoader {
         ?? characterResult.character?.name
         ?? 'Assistant',
     }
-    const compiled = compileTavernProfile({
+    const external = shared.sessionId == null || options.preview === true ? null : this.promptComposition?.compose(shared.sessionId, {
+      kind: options.agent === undefined ? 'preview' : 'assembly',
+      macroContext,
+      greetingReferenceApplies: options.agent === undefined ? null : greetingReferenceAppliesToAgent(options.agent),
+      loreEntries: Array.isArray(worldBookResult.loreEntries) ? worldBookResult.loreEntries : [],
+      worldBookAudit: worldBookResult.audit ?? null,
+      activation: activationContext?.metadata ?? null,
+      diagnostics,
+    })
+    const compiled = external ? {
+      systemText: external.sections.map(section => section.text).filter(Boolean).join('\n\n'),
+      externalSections: external.sections,
+      callConfig: external.callConfig,
+      systemPromptMode: 'append', runtimeContexts: [], activeLoreEntries: [], diagnostics: [],
+    } : compileTavernProfile({
       preset,
       character: characterResult.character,
       user: userResult.user,
@@ -278,6 +293,7 @@ export class TavernProfileLoader {
       composition: {
         section: { name: PROFILE_SECTION, order: 10 },
         systemPromptMode: compiled.systemPromptMode,
+        ...(external ? { mode: 'external', owner: external.owner, sourceRevision: external.sourceRevision, sections: external.sections.map(section => section.name) } : {}),
         profileCharacters: compiled.systemText.length,
         callConfigFields: Object.keys(compiled.callConfig),
       },
@@ -307,7 +323,7 @@ export class TavernProfileLoader {
   }
 
   activeView(sessionId) {
-    const snapshot = this.compile({ sessionId })
+    const snapshot = this.compile({ sessionId, preview: true })
     return {
       selected: snapshot.resources.preset,
       selection: snapshot.audit.selection,

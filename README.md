@@ -1,5 +1,7 @@
 # pmp-dsh-tavern
 
+开发候选 2.3.0 新增 [v3 提示词组合 API](docs/PROMPT_API_V3.md)，待最终人工验收。下方已发布基线仍为 2.2.0。
+
 [English](README_en.md)
 
 以 DeepSeek Harness（DSH）原生会话与执行机制为权威的酒馆兼容插件，提供前后端 API，支持自由组合酒馆能力与 DSH 原生功能。

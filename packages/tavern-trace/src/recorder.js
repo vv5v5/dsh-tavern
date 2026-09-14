@@ -223,6 +223,15 @@ export class TavernTraceRecorder {
         fingerprint: stringOrNull(audit.fingerprint),
         profileSection: PROFILE_SECTION,
         profileOrder: 10,
+        ...(audit.composition?.mode === 'external' ? {
+          composition: {
+            mode: 'external',
+            owner: typeof audit.composition.owner === 'string' ? audit.composition.owner.slice(0, 80) : null,
+            sourceRevision: /^[a-f0-9]{64}$/.test(audit.composition.sourceRevision ?? '') ? audit.composition.sourceRevision : null,
+            sections: Array.isArray(audit.composition.sections)
+              ? audit.composition.sections.filter(name => typeof name === 'string').slice(0, 64).map(name => name.slice(0, 240)) : [],
+          },
+        } : {}),
         systemPromptMode: snapshot?.systemPromptMode === 'replace' ? 'replace' : 'append',
         systemCharacters: expectedSystemText.length,
         systemFingerprint: hash(expectedSystemText),

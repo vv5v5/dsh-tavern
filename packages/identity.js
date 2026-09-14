@@ -2,6 +2,7 @@ export const PLUGIN_ID = 'pmp-dsh-tavern'
 export const API_ROOT = `/${PLUGIN_ID}/api`
 export const API_V1 = `${API_ROOT}/v1`
 export const API_V2 = `${API_ROOT}/v2`
+export const API_V3 = `${API_ROOT}/v3`
 export const LEGACY_API_ROOT = '/dsh-tavern/api'
 export const PROFILE_SECTION = `${PLUGIN_ID}:profile`
 export const CLIENT_REFRESH_EVENT = `${PLUGIN_ID}:refresh`
@@ -49,6 +50,7 @@ export const identityConstants = Object.freeze({
   apiRoot: API_ROOT,
   apiV1: API_V1,
   apiV2: API_V2,
+  apiV3: API_V3,
   chromeServiceName: CHROME_SERVICE_NAME,
   legacyApiRoot: LEGACY_API_ROOT,
   profileSection: PROFILE_SECTION,

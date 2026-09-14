@@ -1,5 +1,12 @@
 # Development changelog
 
+## 2.3.0 — Candidate, not released
+
+- Add HTTP v3 lossless prompt source snapshots, field counts, binding provenance and greeting metadata.
+- Add the public `pmpDshTavernPrompt` backend service with synchronous named-section composition, session ownership CAS, persistent preferences, bounded output and explicit failure recovery. Preserve builtin behavior, DSH history, Host capabilities, RP policy and import-context ownership.
+- Add metadata-only external composition attribution to Trace, a runnable backend example, bilingual API documentation and a [candidate acceptance record](PROMPT_API_V3_REVIEW.md).
+- Package version 2.3.0 reflects an additive public capability; HTTP v3 does not require a package major version. The candidate branch is submitted for review under user authorization; no merge, tag or release is included.
+
 ## 2.2.0 — 2026-09-11 — DSH 0.1.5-rc.1 compatibility and rich-text rendering
 
 - On 2026-09-11, the user accepted the rendering fixes in the temporary DSH `0.1.5-rc.1` environment. All 191 installed package files matched the candidate; configuration and sessions were retained. Automated checks: 541 pass, 5 optional/external integration skips; 22 Chrome checks pass. Template JavaScript remains blocked. See [acceptance records](PLAY_REVIEW_en.md#220-rich-text-rendering-acceptance-2026-09-11).

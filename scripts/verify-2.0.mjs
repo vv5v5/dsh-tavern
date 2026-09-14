@@ -4,6 +4,10 @@ import { spawnSync } from 'node:child_process'
 
 const groups = [
   {
+    name: 'v3 prompt sources, external ownership and Host assembly',
+    files: ['test/prompt-composition.test.mjs', 'test/prompt-composition-host.test.mjs'],
+  },
+  {
     name: 'DSH V3 coordinates and Trace compatibility',
     files: ['test/session-coordinates.test.mjs', 'test/coordinate-migration-integration.test.mjs', 'test/tavern-trace.test.mjs'],
   },
