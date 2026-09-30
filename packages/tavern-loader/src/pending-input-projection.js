@@ -145,11 +145,20 @@ export class PendingInputProjection {
     const derived = typeof session?.deriveMessages === 'function' ? session.deriveMessages() : []
     const durableMessages = []
     let durableMessageCount = 0
+    let skippedWorldBookCount = 0
     if (Array.isArray(derived)) {
       for (let index = derived.length - 1; index >= 0; index -= 1) {
         const message = derived[index]
         if (message?.role !== 'user' && message?.role !== 'assistant') continue
         durableMessageCount += 1
+        // ★★ 2026-09-30（真机 bug）：**⛔ 别把"我们自己注入的世界书"算进扫描面**。
+        //   尾部交付那条 `user` 消息里装的就是**词条正文本身** ⇒ 把它算进扫描面，
+        //   上一轮激活的词条就会靠**自己正文里出现的关键词**把自己重新激活 ——
+        //   一旦激活就再也下不来（真机实测：entries 连着好几轮恒定 5，是个**自锁集合**，
+        //   而不是"当前场景相关的集合"）。扫描面本该只有**玩家与角色的真实对话**。
+        //   ⚠️ 只排这一种（`form: 'runtime-lore'`）：剧情简报 / anima 召回**照常参与** ——
+        //     它们提到人名/地点本来就该触发对应词条，且不会形成"自己喂自己"的闭环。
+        if (message?.source?.form === 'runtime-lore') { skippedWorldBookCount += 1; continue }
         if (durableMessages.length >= this.maxScanMessages) continue
         const extracted = textFromMessage(message, this.maxScanCharacters)
         if (extracted.text === '') continue
@@ -188,7 +197,9 @@ export class PendingInputProjection {
         scannedMessageCount: bounded.messages.length,
         scannedCharacters: bounded.text.length,
         inputCharacters,
-        truncated: bounded.truncated || durableMessageCount > durableMessages.length || pendingOmittedCount > 0 || pendingMessages.some(message => message.truncated === true),
+        // ★ 2026-09-30：如实报"有几条是我们主动排除的"（⛔ 别混进 truncated —— 那不是截断，是有意不扫）。
+        skippedWorldBookMessageCount: skippedWorldBookCount,
+        truncated: bounded.truncated || (durableMessageCount - skippedWorldBookCount) > durableMessages.length || pendingOmittedCount > 0 || pendingMessages.some(message => message.truncated === true),
         claimEventSeqs: claimEventSeqs.filter(Number.isSafeInteger).slice(-4),
         invalidEventCount: invalidEvents,
       },

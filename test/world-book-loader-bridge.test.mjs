@@ -19,7 +19,8 @@ function model(position, content = 'Lore content') {
 test('projects exact ST before/after positions to the loader adapter contract', () => {
   const before = model(0)
   const beforeResult = projectWorldBookForLoader(before, computeWorldBookCandidates(before), { resourceId: 'book-a' })
-  assert.deepEqual(beforeResult.loreEntries, [{ resourceId: 'book-a', id: 'book-a:1', uid: 1, content: 'Lore content', position: 'before' }])
+  // ★ vv5v5 fork（276a4e5）给投影加了 `constant` 透传（尾部交付层要区分蓝灯/绿灯）⇒ 期望值跟着补。
+  assert.deepEqual(beforeResult.loreEntries, [{ resourceId: 'book-a', id: 'book-a:1', uid: 1, content: 'Lore content', position: 'before', constant: true }])
   assert.deepEqual(beforeResult.resources, [{
     id: 'book-a',
     name: 'Bridge fixture',

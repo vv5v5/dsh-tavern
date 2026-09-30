@@ -1,5 +1,25 @@
 # Development changelog
 
+## Local patches in this checkout — **NOT upstream** (本机本地改动)
+
+These are deliberately kept here; each one also carries an inline marker (`★ …本地改动（非上游）…`).
+⛔ Re-align them when rebasing onto a newer upstream, and never ship them as upstream behaviour.
+
+- **`runtime-lore` tail delivery is replaced, not re-appended** — `packages/tavern-loader/src/index.js`.
+  The per-turn world-book message goes through `session.append('user/message', msg, { surfaceOp: { op: 'replace', … } })`,
+  so the model surface keeps exactly one copy (the log keeps every event). Measured 2026-09-30: ten stacked
+  copies were 79.5% of a request body.
+- **The world-book delivery does not feed its own scan** — `packages/tavern-loader/src/pending-input-projection.js`.
+  Messages with `source.form === 'runtime-lore'` are excluded from the activation scan; otherwise an activated
+  entry re-triggers itself from its own injected text and never deactivates (a self-locking set).
+- **Default world-book scan window** — `packages/tavern-loader/src/world-book-adapter.js`.
+  With no `scanDepth` on the book, scan the **last 2 floors** (4 messages) instead of all messages.
+  Upstream's `undefined ⇒ everything` makes every keyword that ever appeared match for the rest of the session.
+- **Self-identifying load path** — `packages/tavern-loader/src/index.js` logs
+  `[tavern-loader] 已从 <path> 加载` at module load, so "which copy is running" is one log line.
+  (This checkout had carried stale duplicate loader files from an older package layout, which cost an hour of
+  debugging: they are never loaded, but they look authoritative.)
+
 ## 2.4.3 — Documentation correction for DSH 0.1.7-rc.1
 
 - Include the rc.1 compatibility and RP tool-history fix from 2.4.2, with unchanged runtime code and public APIs. The 2.4.2 Release was withdrawn after documentation review; its original tag is preserved.

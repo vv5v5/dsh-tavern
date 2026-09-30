@@ -16,6 +16,26 @@ function messageText(message) {
     : ''
 }
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ★★ 本机本地改动（**非上游**）：书里没配 `scanDepth` 时的默认扫描窗口。
+ *
+ * 上游行为：`scanDepth` 未配 ⇒ `undefined` ⇒ **扫全部消息**（只被 maxScanMessages=128 条 /
+ *   maxScanCharacters=64K 字兜着）⇒ 关键词只要在剧情里出现过一次，那一条就此后**每轮都算命中、
+ *   永不退出**。真机实测（70 条的书）：第 15 楼命中 **43 条**，而且条目数只增不减。
+ *
+ * 本地口径（用户 2026-09-30 拍板「改成扫最近两楼」）：
+ *   未配 ⇒ **只扫最近两楼**。一「楼」＝玩家一轮 + 角色一次回复 ⇒ 折算 **4 条消息**。
+ *   ⇒ 词条随剧情自然上/下场（关键词离开窗口就退出），与 SillyTavern 同语义
+ *     （ST 的 `world_info_depth` 也是"未配用全局默认"，只是它默认更紧）。
+ *
+ * ⚠️ 这是**本机口径、不是上游语义**：上游升级本文件时**必须重新对回这一处**（见 CHANGELOG
+ *    「本地补丁」一节）。书里**显式**配了 `scanDepth`（含 `0` = 一条都不扫）⇒ **仍以书里的为准**，
+ *   这里只补"没配"的那一格。
+ * ══════════════════════════════════════════════════════════════════════════════
+ */
+const LOCAL_DEFAULT_SCAN_DEPTH_MESSAGES = 4
+
 function boundedScanText(model, context, maxCharacters, maxMessages) {
   let text = typeof context.conversationText === 'string' ? context.conversationText : ''
   let messages = Array.isArray(context.activationContext?.messages)
@@ -25,8 +45,10 @@ function boundedScanText(model, context, maxCharacters, maxMessages) {
     messages = context.agent.session.deriveMessages().map(messageText).filter(Boolean)
   }
   if (messages !== null) {
-    const depth = model.settings?.scanDepth
-    const depthBounded = depth === 0 ? [] : (Number.isSafeInteger(depth) ? messages.slice(-depth) : messages)
+    // ★ 本地改动（非上游）：`undefined ⇒ 全部` 改成本地默认窗口；显式配的值（含 0）照旧优先。
+    const configured = model.settings?.scanDepth
+    const depth = Number.isSafeInteger(configured) ? configured : LOCAL_DEFAULT_SCAN_DEPTH_MESSAGES
+    const depthBounded = depth === 0 ? [] : messages.slice(-depth)
     text = depthBounded.slice(-maxMessages).join('\n')
   }
   const originalLength = text.length
