@@ -70,6 +70,12 @@ import {
 } from './rp-mode.js'
 import { prepareStorageDir } from './storage-location.js'
 
+// ★ 2026-09-30：**如实报"我是从哪一份加载的"**。这个包曾经同时存在 `src/index.js`（package main）
+//   与**旁边的同名扁平副本**（旧包布局的遗留）—— 改了一份不生效、排查半天（真机事故）。
+//   照 anima 的既有做法（`已解析到 dsh-anima-rag：<path>`）打一行，任何"吃错代码"从此一行日志可见。
+//   ⚠️ 用 console 而非 ctx.logger：这条要在**模块加载期**就打出来（ctx 还没有），也避免被日志级别吞掉。
+console.log(`[tavern-loader] 已从 ${new URL(import.meta.url).pathname} 加载`)
+
 export const name = PLUGIN_ID
 export const inject = [
   'systemPrompt',
@@ -271,6 +277,24 @@ export function createResourceWorldBookBindingPolicy(
       return resourceWorldBooks.set(kind, resourceId, normalized)
     },
   }
+}
+
+/**
+ * 尾部世界书条目的**交付计划**（纯函数 —— 这一单的判据就在这里，便于自检直测）。
+ *
+ * 返回交给 `session.append('user/message', message, intent)` 的 surface 意图：
+ *   · 记着上一轮的 seq、且它**还在当前 surface 上** ⇒ `{ op:'replace', startSeq, endSeq }`
+ *     ⇒ **新节点占它的位置、它从请求面消失**（= shadowed；日志一条不删）。
+ *   · 否则（首轮 / 那条被压缩掉 / 拿不到 nodes）⇒ `'append'`。
+ *     ⚠️ 必须退回 append：replace 的 startSeq/endSeq **必须是当前 surface 上的节点**，
+ *        拿一个已被 shadowed 的旧 seq 去 replace 会被宿主拒掉。
+ */
+export function planRuntimeLoreSurfaceOp({ previousSeq, surfaceNodes } = {}) {
+  const nodes = Array.isArray(surfaceNodes) ? surfaceNodes : null
+  const replaceable = nodes !== null && Number.isSafeInteger(previousSeq) && nodes.includes(previousSeq)
+  return replaceable
+    ? { surfaceOp: { op: 'replace', startSeq: previousSeq, endSeq: previousSeq }, sourceEventSeqs: [previousSeq] }
+    : { surfaceOp: 'append' }
 }
 
 export function apply(ctx, config = {}) {
@@ -549,6 +573,81 @@ export function apply(ctx, config = {}) {
     if (result?.kind === 'retry') traceSafely(() => assemblyRecorder.nextRequest(payload.agent?.id))
     traceSafely(() => traceRecorder.observeRequestError(payload.agent, payload.turn, payload.step))
     return result
+  })
+
+  // ★ vv5v5 fork（2026-09-28，缓存优化）：触发制世界书条目（绿灯）→ 对话尾部。
+  //   通道与 phi-message 相同（pre-step 追加 user 消息，source.kind=plugin ⇒ 面板按来源过滤）；
+  //   历史零改动 ⇒ system 稳定前缀（persona+蓝灯）不被每轮变化的触发集打断（缓存命中率 13%→90%+）。
+  //   常驻条目（constant/蓝灯）仍在 system —— 它们是稳定前缀的一部分，搬走没有收益。
+  //
+  // ★★ 2026-09-30 **换掉而不是叠加**（真机实测：10 楼后请求里叠了 **10 份**，每份 21,623 字，
+  //   光这一项占请求体 **79.5%** —— 旧写法每轮 `messages: [...messages, 新条目]` 只加不减，
+  //   而上一条已作为 `user/message` 落盘成历史 ⇒ 逐楼累积）。改用宿主官方的 **surface 替换**：
+  //   `session.append('user/message', …, { surfaceOp: { op:'replace', startSeq, endSeq } })`
+  //   —— compaction 压历史用的同一套（`compaction-basic/src/region.ts`）：**日志一条不删，
+  //   被替换的从请求面消失**（= `shadowed`）。于是请求里永远只有**最新一份**。
+  //   · 上一轮的 seq **自己记**：`session.surface.nodes` 只给 seq、不给事件，认不出哪条是我们的。
+  //   · 用之前先确认它**还在当前 surface 上**：被压缩掉就不再是节点，而 replace 的
+  //     startSeq/endSeq 必须是**当前 surface 上的节点** ⇒ 那时退回 `'append'`（等价于首次）。
+  //   ⚠️ replace 的语义是「新节点**占被替换节点的位置**」（与 compaction 的 checkpoint 同款）
+  //     ⇒ 注入此后停在**它第一次出现的位置**，不再一直贴着尾部；换来的是"只有一份"。
+  const tailLoreSeqBySession = new Map()
+  /** 这一步的**如实账**：走 replace 还是 append、为什么（⛔ 不许静默 —— 静默回退过一次，见下）。
+   *  ⚠️ 同时走 stdout 与 ctx.logger：2026-09-30 排查时 ctx.logger.info 一条都没出现，
+   *     当时分不清"没跑到这里"还是"logger 被过滤"（宿主里那段确实是我改的那份代码，
+   *     结果是**加载了另一份副本**）。两条都写，就不会再有这种歧义。 */
+  const tailLoreLog = (m) => {
+    const line = `[tavern-loader] runtime-lore: ${m}`
+    try { console.log(line) } catch { /* 日志绝不许影响这一步 */ }
+    try { ctx.logger?.info?.(line) } catch { /* 同上 */ }
+  }
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const decision = await (typeof next === 'function' ? next() : Promise.resolve({ kind: 'enter', messages: payload?.messages ?? [] }))
+    try {
+      if (decision === null || typeof decision !== 'object' || decision.kind !== 'enter') return decision
+      const agent = payload?.agent
+      if (agent === undefined || agent === null) return decision
+      const snapshot = runtime.assembledFor(agent) ?? runtime.compile({ agent })
+      const entries = snapshot.runtimeLore ?? []
+      if (entries.length === 0) return decision
+      const text = entries.map((entry) => {
+        const rendered = typeof entry.content === 'string' ? entry.content : ''
+        return rendered === '' ? null : '〔世界书 · ' + String(entry.resourceId ?? '?') + '〕' + rendered
+      }).filter(Boolean).join('\n\n')
+      if (text === '') return decision
+      const message = {
+        // 宿主不会替 pre-step 决策消息补 id；缺 id 的消息落盘过不了 V4 校验，resume 直接拒载（2026-09-29 踩过）。
+        id: randomUUID(),
+        role: 'user',
+        content: [{ type: 'text', text: '[本轮激活的世界书条目 —— 世界事实，供描写参考]\n\n' + text + '[/本轮激活的世界书条目]' }],
+        source: { kind: 'plugin:pmp-dsh-tavern', form: 'runtime-lore' },
+      }
+      const session = agent.session
+      if (session === undefined || session === null || typeof session.append !== 'function') {
+        // 拿不到会话（宿主形状变了）⇒ 退回老路：塞进 decision.messages，宁可叠加也不静默丢内容。
+        // ⚠️ 这条**必须留痕**：它是"每轮叠加"的老行为，静默回退过一次（2026-09-30 验收不通过时查了半小时）。
+        tailLoreLog(`no session.append ⇒ 退回 decision.messages（entries=${entries.length}, session=${typeof session}）`)
+        const messages = Array.isArray(decision.messages) ? decision.messages : []
+        return { ...decision, messages: [...messages, message] }
+      }
+      const previous = tailLoreSeqBySession.get(session.id)
+      const nodes = session.surface?.nodes
+      const appended = session.append('user/message', message, planRuntimeLoreSurfaceOp({
+        previousSeq: previous,
+        surfaceNodes: nodes,
+      }))
+      if (Number.isSafeInteger(appended?.seq)) tailLoreSeqBySession.set(session.id, appended.seq)
+      // ★ 一行如实账：走的是 replace（换掉旧的）还是 append（首次/旧的已不在 surface 上）。
+      tailLoreLog(`entries=${entries.length} prev=${String(previous)} nodes=${Array.isArray(nodes) ? nodes.length : 'n/a'}`
+        + ` ⇒ ${Number.isSafeInteger(previous) && Array.isArray(nodes) && nodes.includes(previous) ? 'replace' : 'append'}`
+        + ` seq=${String(appended?.seq)}`)
+      // ⛔ 不要再把这条塞进 decision.messages —— 那条路会被 agent-loop 逐条 append 成**新的**历史事件。
+      return decision
+    } catch (error) {
+      // ⛔ 不许静默：这条路径出错时**必须**留下原因（否则表现就是"照旧叠加"，谁也看不出是为什么）。
+      tailLoreLog(`threw: ${error instanceof Error ? error.message : String(error)}`)
+      return decision
+    }
   })
 
   ctx.on('system-prompt/assemble', async (assembly, context, next) => {
